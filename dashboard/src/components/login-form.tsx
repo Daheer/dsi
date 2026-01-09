@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
+import Image from "next/image"
+import { useTheme } from "next-themes"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -24,11 +26,23 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter()
   const { setToken, fetchUser } = useAuthStore()
+  const { theme, systemTheme } = useTheme()
   const [isLoading, setIsLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [credentials, setCredentials] = useState({
     username: "",
     password: "",
   })
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Determine the current theme
+  const currentTheme = theme === "system" ? systemTheme : theme
+  const logoSrc = currentTheme === "dark"
+    ? "/images/Dark Mode Transparent.svg"
+    : "/images/Light Mode Transparent.svg"
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -58,14 +72,23 @@ export function LoginForm({
         <CardContent className="grid p-0 md:grid-cols-2">
           <form className="p-6 md:p-8" onSubmit={handleSubmit}>
             <FieldGroup>
-              <div className="flex flex-col items-center gap-2 text-center">
-                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary font-bold text-primary-foreground">
-                  DS
+              <div className="flex flex-col items-center gap-4 text-center">
+                {mounted && (
+                  <Image
+                    src={logoSrc}
+                    alt="De Signature International"
+                    width={240}
+                    height={96}
+                    className="w-auto h-24"
+                    priority
+                  />
+                )}
+                <div>
+                  <h1 className="text-2xl font-bold">De Signature International</h1>
+                  <p className="text-muted-foreground text-balance">
+                    Welcome Back!
+                  </p>
                 </div>
-                <h1 className="text-2xl font-bold">Welcome back</h1>
-                <p className="text-muted-foreground text-balance">
-                  Login to De Signature International
-                </p>
               </div>
               <Field>
                 <FieldLabel htmlFor="username">Username</FieldLabel>
@@ -101,28 +124,23 @@ export function LoginForm({
                   {isLoading ? "Signing in..." : "Login"}
                 </Button>
               </Field>
-              <FieldDescription className="text-center text-xs">
-                Hotel Management Platform v1.0
-              </FieldDescription>
+
             </FieldGroup>
           </form>
-          <div className="bg-muted relative hidden md:block">
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/5">
-              <div className="text-center">
-                <div className="mb-4 text-6xl font-bold text-primary">DS</div>
-                <p className="text-lg font-semibold text-muted-foreground">
-                  De Signature International
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Enterprise Hotel Management
-                </p>
-              </div>
-            </div>
+          <div className="relative hidden md:block">
+            <Image
+              src="/images/out.png"
+              alt="De Signature International Hotel"
+              width={800}
+              height={1000}
+              className="h-full w-full object-cover"
+              priority
+            />
           </div>
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center text-xs">
-        © 2024 De Signature International. All rights reserved.
+        © 2026 De Signature International. All rights reserved.
       </FieldDescription>
     </div>
   )

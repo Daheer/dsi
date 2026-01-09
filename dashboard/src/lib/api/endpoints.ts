@@ -185,7 +185,7 @@ export const housekeepingApi = {
     api.put<HousekeepingTask>(`/housekeeping/tasks/${id}`, task),
 
   completeTask: (id: string) =>
-    api.post<HousekeepingTask>(`/housekeeping/tasks/${id}/complete`, {}),
+    api.patch<HousekeepingTask>(`/housekeeping/tasks/${id}/complete`, {}),
 };
 
 // Kitchen/Meals API

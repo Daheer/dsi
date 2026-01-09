@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Bell, Info, AlertTriangle, XCircle, CheckCircle } from "lucide-react"
 import { notificationsApi } from "@/lib/api"
 import type { Notification as AppNotification, NotificationType } from "@/types"
@@ -52,6 +53,7 @@ const getNotificationBg = (type: NotificationType) => {
 }
 
 export function NotificationBell() {
+    const router = useRouter()
     const [notifications, setNotifications] = useState<AppNotification[]>([])
     const [unreadCount, setUnreadCount] = useState(0)
     const [loading, setLoading] = useState(false)
@@ -79,16 +81,23 @@ export function NotificationBell() {
         return () => clearInterval(interval)
     }, [])
 
-    const handleMarkAsRead = async (notificationId: string) => {
+    const handleNotificationClick = async (notification: AppNotification) => {
         try {
-            setReadingId(notificationId)
-            await notificationsApi.markAsRead(notificationId)
+            setReadingId(notification.id)
+
+            // Mark as read
+            await notificationsApi.markAsRead(notification.id)
 
             // Update local state - remove from list
-            setNotifications(notifications.filter(n => n.id !== notificationId))
+            setNotifications(notifications.filter(n => n.id !== notification.id))
             setUnreadCount(prev => Math.max(0, prev - 1))
+
+            // If notification relates to a booking, navigate to bookings page
+            if (notification.entity_type === 'booking' && notification.entity_id) {
+                router.push(`/dashboard/bookings?view_booking_id=${notification.entity_id}`)
+            }
         } catch (error) {
-            console.error("Failed to mark notification as read:", error)
+            console.error("Failed to handle notification:", error)
         } finally {
             setReadingId(null)
         }
@@ -156,7 +165,7 @@ export function NotificationBell() {
                                     getNotificationBg(notification.type),
                                     readingId === notification.id && "opacity-50"
                                 )}
-                                onClick={() => handleMarkAsRead(notification.id)}
+                                onClick={() => handleNotificationClick(notification)}
                             >
                                 {/* Icon */}
                                 <div className="mt-0.5">

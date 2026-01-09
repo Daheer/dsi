@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
+import { useTheme } from "next-themes"
 import {
   IconBuildingCommunity,
   IconCalendarEvent,
@@ -8,9 +10,6 @@ import {
   IconClipboardList,
   IconCreditCard,
   IconDashboard,
-  IconHelp,
-  IconLogout,
-  IconSearch,
   IconSettings,
   IconToolsKitchen2,
   IconUsers,
@@ -78,15 +77,25 @@ const navItemsByRole: Record<UserRole, Array<{ title: string; url: string; icon:
 }
 
 const navSecondary = [
-  { title: "Settings", url: "#", icon: IconSettings },
-  { title: "Get Help", url: "#", icon: IconHelp },
-  { title: "Search", url: "#", icon: IconSearch },
+  { title: "Settings", url: "/dashboard/settings", icon: IconSettings },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, logout } = useAuthStore()
+  const { theme, systemTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const navItems = user?.role ? navItemsByRole[user.role] : navItemsByRole.receptionist
+
+  // Determine the current theme
+  const currentTheme = theme === "system" ? systemTheme : theme
+  const logoSrc = currentTheme === "dark"
+    ? "/images/Dark Mode Transparent.svg"
+    : "/images/Light Mode Transparent.svg"
 
   const userData = {
     name: user?.full_name || "User",
@@ -101,12 +110,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="data-[slot=sidebar-menu-button]:!p-1.5"
+              className="data-[slot=sidebar-menu-button]:!p-2"
             >
-              <a href="/dashboard">
-                <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-xs font-bold text-primary-foreground">
-                  DS
-                </div>
+              <a href="/dashboard" className="flex items-center gap-2">
+                {mounted && (
+                  <Image
+                    src={logoSrc}
+                    alt="De Signature International"
+                    width={120}
+                    height={32}
+                    className="h-8 w-auto"
+                    priority
+                  />
+                )}
                 <span className="text-base font-semibold">De Signature</span>
               </a>
             </SidebarMenuButton>

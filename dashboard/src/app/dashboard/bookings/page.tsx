@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import {
     Plus,
@@ -77,6 +78,8 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 };
 
 export default function BookingsPage() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
@@ -91,6 +94,7 @@ export default function BookingsPage() {
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [loadingSpecificBooking, setLoadingSpecificBooking] = useState(false);
 
     // New Booking State
     const [guestTab, setGuestTab] = useState<'search' | 'create'>('search');
@@ -121,6 +125,15 @@ export default function BookingsPage() {
         fetchData();
     }, []);
 
+    // Handle URL parameter for auto-opening booking modal (from notifications)
+    useEffect(() => {
+        const viewBookingId = searchParams.get('view_booking_id');
+
+        if (viewBookingId && !isLoading) {
+            loadSpecificBooking(viewBookingId);
+        }
+    }, [searchParams, isLoading]);
+
     const fetchData = async () => {
         try {
             const [bookingsData, guestsData, roomsData] = await Promise.all([
@@ -136,6 +149,20 @@ export default function BookingsPage() {
             toast.error(getErrorMessage(error, 'Failed to load bookings'));
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const loadSpecificBooking = async (bookingId: string) => {
+        try {
+            setLoadingSpecificBooking(true);
+            const booking = await bookingsApi.get(bookingId);
+            setSelectedBooking(booking);
+            setShowViewDialog(true);
+        } catch (error) {
+            console.error('Failed to load booking:', error);
+            toast.error(getErrorMessage(error, 'Booking not found'));
+        } finally {
+            setLoadingSpecificBooking(false);
         }
     };
 
@@ -284,6 +311,16 @@ export default function BookingsPage() {
     const handleViewBooking = (booking: Booking) => {
         setSelectedBooking(booking);
         setShowViewDialog(true);
+    };
+
+    const handleCloseViewDialog = () => {
+        setShowViewDialog(false);
+        setSelectedBooking(null);
+
+        // Clear URL parameter if present (from notification navigation)
+        if (searchParams.get('view_booking_id')) {
+            router.replace('/dashboard/bookings', { scroll: false });
+        }
     };
 
     const handleEditBooking = (booking: Booking) => {
@@ -799,7 +836,9 @@ export default function BookingsPage() {
             </Card>
 
             {/* View Booking Dialog */}
-            <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+            <Dialog open={showViewDialog} onOpenChange={(open) => {
+                if (!open) handleCloseViewDialog();
+            }}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Booking Details</DialogTitle>

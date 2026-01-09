@@ -43,9 +43,9 @@ export function SectionCards() {
 
   // Calculate metrics
   const totalRooms = rooms.length
-  const occupiedRooms = rooms.filter((r) => r.status === "occupied").length
+  const checkedInBookings = bookings.filter((b) => b.status === "checked_in").length
   const availableRooms = rooms.filter((r) => r.status === "available").length
-  const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0
+  const occupancyRate = totalRooms > 0 ? Math.round((checkedInBookings / totalRooms) * 100) : 0
 
   const today = new Date().toISOString().split("T")[0]
   const todaysCheckins = bookings.filter(
@@ -79,7 +79,7 @@ export function SectionCards() {
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              {occupiedRooms}/{totalRooms} Rooms
+              {checkedInBookings}/{totalRooms} Rooms
             </Badge>
           </CardAction>
         </CardHeader>
@@ -88,7 +88,7 @@ export function SectionCards() {
             {availableRooms} rooms available
           </div>
           <div className="text-muted-foreground">
-            {occupiedRooms} currently occupied
+            {checkedInBookings} guests checked in
           </div>
         </CardFooter>
       </Card>

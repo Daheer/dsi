@@ -75,6 +75,7 @@ export default function HousekeepingPage() {
           disabled={refreshing}
           variant="outline"
           size="sm"
+          className="hover:cursor-pointer"
         >
           <IconRefresh className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
           Refresh
@@ -135,7 +136,7 @@ export default function HousekeepingPage() {
                 {task.status === "pending" || task.status === "in_progress" ? (
                   <Button
                     onClick={() => handleComplete(task.id)}
-                    className="w-full"
+                    className="w-full hover:cursor-pointer"
                     size="sm"
                     disabled={completingTaskId === task.id}
                   >

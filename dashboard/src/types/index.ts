@@ -271,6 +271,8 @@ export interface Notification {
   message: string;
   type: NotificationType;
   is_read: boolean;
+  entity_type?: string;  // e.g., 'booking', 'guest', 'payment'
+  entity_id?: string;    // ID of the related entity
   created_at: string;
 }
 
@@ -279,6 +281,8 @@ export interface NotificationCreate {
   message: string;
   type?: NotificationType;
   user_id?: string;
+  entity_type?: string;
+  entity_id?: string;
 }
 
 export interface NotificationUpdate {
