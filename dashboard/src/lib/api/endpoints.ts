@@ -156,9 +156,43 @@ export const bookingsApi = {
 
   checkOut: (bookingId: string) =>
     api.post<Booking>('/bookings/check-out', { booking_id: bookingId }),
+
+  calculatePrice: (roomTypeId: string, checkIn: string, checkOut: string) =>
+    api.post<{
+      total: number;
+      base_price: number;
+      nights: number;
+      room_type_name: string;
+      breakdown: Array<{
+        date: string;
+        base_price: number;
+        price: number;
+        season: string | null;
+        percentage_increase: number | null;
+      }>;
+    }>('/bookings/quote', {
+      room_type_id: roomTypeId,
+      check_in: checkIn,
+      check_out: checkOut,
+    }),
 };
 
 // Payments API
+export interface InitializePaymentResponse {
+  checkoutUrl: string;
+  transactionReference: string;
+  paymentReference: string;
+}
+
+export interface VerifyPaymentResponse {
+  paymentStatus: string;
+  amountPaid: number | null;
+  paidOn: string | null;
+  paymentReference: string | null;
+  transactionReference: string | null;
+  paymentMethod: string | null;
+}
+
 export const paymentsApi = {
   list: (params?: { booking_id?: string }) =>
     api.get<Payment[]>('/payments', { params }),
@@ -169,6 +203,18 @@ export const paymentsApi = {
 
   // Refund requests
   listRefundRequests: () => api.get<RefundRequest[]>('/refund-requests'),
+
+  // Initialize a payment with Monnify
+  initializePayment: (bookingId: string, amount: number, email: string) =>
+    api.post<InitializePaymentResponse>('/payments/initialize', {
+      booking_id: bookingId,
+      amount,
+      email,
+    }),
+
+  // Verify a payment transaction
+  verifyPayment: (reference: string) =>
+    api.get<VerifyPaymentResponse>(`/payments/verify/${reference}`),
 };
 
 // Housekeeping API
