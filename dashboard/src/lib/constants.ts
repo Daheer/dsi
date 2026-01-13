@@ -31,16 +31,20 @@ export const ROOM_STATUS_LABELS = {
 // Booking status colors
 export const BOOKING_STATUS_COLORS = {
   reserved: 'bg-blue-500',
+  confirmed: 'bg-green-500',
   checked_in: 'bg-emerald-500',
   checked_out: 'bg-slate-500',
   cancelled: 'bg-rose-500',
+  expired: 'bg-orange-500',
 } as const;
 
 export const BOOKING_STATUS_LABELS = {
   reserved: 'Reserved',
+  confirmed: 'Confirmed',
   checked_in: 'Checked In',
   checked_out: 'Checked Out',
   cancelled: 'Cancelled',
+  expired: 'Expired',
 } as const;
 
 // Payment method labels

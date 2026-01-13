@@ -68,6 +68,7 @@ import { toast } from 'sonner';
 import { bookingsApi, guestsApi, roomsApi } from '@/lib/api';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS } from '@/lib/constants';
 import type { Booking, Guest, Room, BookingCreate, GuestCreate, BookingUpdate } from '@/types';
+import { CheckInModal } from '@/components/check-in-modal';
 
 // Helper to extract error message from API errors
 const getErrorMessage = (error: unknown, fallback: string): string => {
@@ -91,6 +92,7 @@ export default function BookingsPage() {
     const [showNewBookingDialog, setShowNewBookingDialog] = useState(false);
     const [showViewDialog, setShowViewDialog] = useState(false);
     const [showEditDialog, setShowEditDialog] = useState(false);
+    const [showCheckInDialog, setShowCheckInDialog] = useState(false);
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -171,7 +173,7 @@ export default function BookingsPage() {
         return bookings.some((b) => {
             if (b.room_id !== roomId) return false;
             if (excludeBookingId && b.id === excludeBookingId) return false;
-            if (b.status === 'cancelled' || b.status === 'checked_out') return false;
+            if (b.status === 'cancelled' || b.status === 'checked_out' || b.status === 'expired') return false;
 
             const existingStart = new Date(b.check_in_date);
             const existingEnd = new Date(b.check_out_date);
@@ -379,15 +381,9 @@ export default function BookingsPage() {
         );
     };
 
-    const handleCheckIn = async (bookingId: string) => {
-        await toast.promise(
-            bookingsApi.checkIn(bookingId).then(() => fetchData()),
-            {
-                loading: 'Checking in guest...',
-                success: 'Guest checked in successfully!',
-                error: (err) => getErrorMessage(err, 'Failed to check in guest'),
-            }
-        );
+    const handleCheckIn = (booking: Booking) => {
+        setSelectedBooking(booking);
+        setShowCheckInDialog(true);
     };
 
     const handleCheckOut = async (bookingId: string) => {
@@ -418,7 +414,7 @@ export default function BookingsPage() {
 
     // Calculate stats
     const today = new Date().toISOString().split('T')[0];
-    const todaysCheckins = bookings.filter((b) => b.check_in_date === today && b.status === 'reserved').length;
+    const todaysCheckins = bookings.filter((b) => b.check_in_date === today && (b.status === 'reserved' || b.status === 'confirmed')).length;
     const todaysCheckouts = bookings.filter((b) => b.check_out_date === today && b.status === 'checked_in').length;
     const activeBookings = bookings.filter((b) => b.status === 'checked_in').length;
 
@@ -503,7 +499,7 @@ export default function BookingsPage() {
                     <CardHeader>
                         <CardDescription>Pending Bookings</CardDescription>
                         <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                            {bookings.filter((b) => b.status === 'reserved').length}
+                            {bookings.filter((b) => b.status === 'reserved' || b.status === 'confirmed').length}
                         </CardTitle>
                         <CardAction>
                             <Badge variant="outline">Reserved</Badge>
@@ -740,9 +736,11 @@ export default function BookingsPage() {
                             <SelectContent>
                                 <SelectItem value="all">All Status</SelectItem>
                                 <SelectItem value="reserved">Reserved</SelectItem>
+                                <SelectItem value="confirmed">Confirmed</SelectItem>
                                 <SelectItem value="checked_in">Checked In</SelectItem>
                                 <SelectItem value="checked_out">Checked Out</SelectItem>
                                 <SelectItem value="cancelled">Cancelled</SelectItem>
+                                <SelectItem value="expired">Expired</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -793,25 +791,36 @@ export default function BookingsPage() {
                                                             <Eye className="mr-2 h-4 w-4" />
                                                             View Details
                                                         </DropdownMenuItem>
-                                                        {(booking.status === 'reserved') && (
+                                                        {(booking.status === 'reserved' || booking.status === 'confirmed') && (
                                                             <DropdownMenuItem onClick={() => handleEditBooking(booking)}>
                                                                 <Pencil className="mr-2 h-4 w-4" />
                                                                 Edit
                                                             </DropdownMenuItem>
                                                         )}
-                                                        {booking.status === 'reserved' && (
-                                                            <DropdownMenuItem onClick={() => handleCheckIn(booking.id)}>
-                                                                <LogIn className="mr-2 h-4 w-4" />
-                                                                Check In
-                                                            </DropdownMenuItem>
-                                                        )}
+                                                        {(() => {
+                                                            // Check-in logic: Allow RESERVED (pay at desk) and CONFIRMED (pre-paid)
+                                                            // Room assignment happens in the check-in modal (soft allocation)
+                                                            // Note: room/roomId is NOT checked here
+                                                            const canCheckIn = 
+                                                                (booking.status === 'reserved' || booking.status === 'confirmed') &&
+                                                                booking.status !== 'checked_in' &&
+                                                                booking.status !== 'cancelled' &&
+                                                                booking.status !== 'expired';
+                                                            
+                                                            return canCheckIn ? (
+                                                                <DropdownMenuItem onClick={() => handleCheckIn(booking)}>
+                                                                    <LogIn className="mr-2 h-4 w-4" />
+                                                                    Check In
+                                                                </DropdownMenuItem>
+                                                            ) : null;
+                                                        })()}
                                                         {booking.status === 'checked_in' && (
                                                             <DropdownMenuItem onClick={() => handleCheckOut(booking.id)}>
                                                                 <LogOutIcon className="mr-2 h-4 w-4" />
                                                                 Check Out
                                                             </DropdownMenuItem>
                                                         )}
-                                                        {(booking.status === 'reserved') && (
+                                                        {(booking.status === 'reserved' || booking.status === 'confirmed') && (
                                                             <>
                                                                 <DropdownMenuSeparator />
                                                                 <DropdownMenuItem
@@ -902,6 +911,18 @@ export default function BookingsPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Check-In Modal */}
+            <CheckInModal
+                open={showCheckInDialog}
+                onOpenChange={setShowCheckInDialog}
+                booking={selectedBooking}
+                guest={selectedBooking ? getGuest(selectedBooking.guest_id) || null : null}
+                onSuccess={() => {
+                    setSelectedBooking(null);
+                    fetchData();
+                }}
+            />
 
             {/* Edit Booking Dialog */}
             <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>

@@ -14,6 +14,7 @@ import type {
   Booking,
   BookingCreate,
   BookingUpdate,
+  BookingCheckIn,
   Payment,
   PaymentCreate,
   RefundRequest,
@@ -151,8 +152,8 @@ export const bookingsApi = {
 
   delete: (id: string) => api.delete<void>(`/bookings/${id}`),
 
-  checkIn: (bookingId: string) =>
-    api.post<Booking>('/bookings/check-in', { booking_id: bookingId }),
+  checkIn: (data: BookingCheckIn) =>
+    api.post<Booking>('/bookings/check-in', data),
 
   checkOut: (bookingId: string) =>
     api.post<Booking>('/bookings/check-out', { booking_id: bookingId }),

@@ -3,7 +3,7 @@
 // Enums
 export type UserRole = 'admin' | 'manager' | 'receptionist' | 'housekeeping' | 'kitchen' | 'auditor';
 export type RoomStatus = 'available' | 'occupied' | 'cleaning' | 'maintenance';
-export type BookingStatus = 'reserved' | 'checked_in' | 'checked_out' | 'cancelled';
+export type BookingStatus = 'reserved' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'expired';
 export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'mobile';
 export type PaymentStatus = 'pending' | 'completed' | 'refunded' | 'failed';
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
@@ -139,6 +139,14 @@ export interface BookingUpdate {
   notes?: string;
 }
 
+export interface BookingCheckIn {
+  booking_id: string;
+  room_id: string;  // Mandatory - specific room being assigned (soft allocation)
+  guest_id_type?: string;  // To fill gaps in guest profile
+  guest_id_number?: string;  // To fill gaps in guest profile
+  key_card_id?: string;  // The ID of the key/card given
+}
+
 // Payment
 export interface Payment {
   id: string;
@@ -146,7 +154,7 @@ export interface Payment {
   amount: number;
   payment_method: PaymentMethod;
   status: PaymentStatus;
-  processed_by: string;
+  processed_by?: string;  // Optional for webhook/automated payments
   processed_at: string;
   receipt_number?: string;
   notes?: string;
