@@ -107,7 +107,8 @@ export interface GuestUpdate {
 export interface Booking {
   id: string;
   guest_id: string;
-  room_id: string;
+  room_type_id: string;  // Room type category (always present)
+  room_id?: string;  // Specific room (optional - assigned at check-in)
   check_in_date: string;
   check_out_date: string;
   total_amount: number;
@@ -116,13 +117,15 @@ export interface Booking {
   created_at: string;
   notes?: string;
   guest?: Guest;
+  room_type?: RoomType;
   room?: Room;
 }
 
 export interface BookingCreate {
   guest_id?: string;
   guest_details?: GuestCreate;
-  room_id: string;
+  room_type_id: string;  // Room type category (required)
+  room_id?: string;  // Optional specific room (for internal staff bookings)
   check_in_date: string;
   check_out_date: string;
   total_amount: number;
@@ -131,6 +134,7 @@ export interface BookingCreate {
 
 export interface BookingUpdate {
   guest_id?: string;
+  room_type_id?: string;
   room_id?: string;
   check_in_date?: string;
   check_out_date?: string;

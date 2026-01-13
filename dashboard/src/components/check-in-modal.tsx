@@ -78,15 +78,17 @@ export function CheckInModal({
             // Get all rooms
             const allRooms = await roomsApi.list();
 
-            // Get the booked room to determine the room type
-            // This is needed to filter available rooms of the same type
-            let bookedRoomTypeId: string | undefined;
+            // SOFT ALLOCATION: Get room_type_id directly from booking
+            // This works even when room_id is null (pooled inventory)
+            let bookedRoomTypeId: string | undefined = booking.room_type_id;
             
-            if (booking.room?.room_type_id) {
-                // Room object is populated with room_type_id
+            // Fallback: Try to get from room object if room_type_id not in booking
+            if (!bookedRoomTypeId && booking.room?.room_type_id) {
                 bookedRoomTypeId = booking.room.room_type_id;
-            } else if (booking.room_id) {
-                // Need to fetch the room to get room_type_id
+            }
+            
+            // Last resort: Get from specific room if room_id is populated
+            if (!bookedRoomTypeId && booking.room_id) {
                 const bookedRoom = allRooms.find(r => r.id === booking.room_id);
                 bookedRoomTypeId = bookedRoom?.room_type_id;
             }
