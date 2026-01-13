@@ -113,6 +113,7 @@ export interface Booking {
   check_out_date: string;
   total_amount: number;
   status: BookingStatus;
+  payment_status?: BookingPaymentStatus;
   created_by: string;
   created_at: string;
   notes?: string;
@@ -261,6 +262,15 @@ export interface PaginatedResponse<T> {
   page: number;
   per_page: number;
 }
+
+export interface BookingsPaginatedResponse {
+  items: Booking[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export type BookingPaymentStatus = 'unpaid' | 'partial' | 'paid';
 
 // Dashboard Stats
 export interface DashboardStats {

@@ -15,6 +15,8 @@ import type {
   BookingCreate,
   BookingUpdate,
   BookingCheckIn,
+  BookingsPaginatedResponse,
+  BookingPaymentStatus,
   Payment,
   PaymentCreate,
   RefundRequest,
@@ -29,6 +31,7 @@ import type {
   NotificationCreate,
   TokenResponse,
   LoginRequest,
+  BookingStatus,
 } from '@/types';
 
 // Auth API
@@ -139,9 +142,19 @@ export const guestsApi = {
 };
 
 // Bookings API
+export interface BookingsListParams {
+  skip?: number;
+  limit?: number;
+  sort_by?: string;
+  order?: 'asc' | 'desc';
+  search?: string;
+  status?: BookingStatus;
+  payment_status?: BookingPaymentStatus;
+}
+
 export const bookingsApi = {
-  list: (params?: { guest_id?: string; room_id?: string; status?: string }) =>
-    api.get<Booking[]>('/bookings', { params }),
+  list: (params?: BookingsListParams) =>
+    api.get<BookingsPaginatedResponse>('/bookings', { params }),
 
   get: (id: string) => api.get<Booking>(`/bookings/${id}`),
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import {
@@ -16,6 +16,9 @@ import {
     Loader2,
     UserPlus,
     X,
+    ArrowUpDown,
+    ChevronLeft,
+    ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +72,7 @@ import { bookingsApi, guestsApi, roomsApi } from '@/lib/api';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS } from '@/lib/constants';
 import type { Booking, Guest, Room, RoomType, BookingCreate, GuestCreate, BookingUpdate } from '@/types';
 import { CheckInModal } from '@/components/check-in-modal';
+import { useDebounce } from '@/hooks/use-debounce';
 
 // Helper to extract error message from API errors
 const getErrorMessage = (error: unknown, fallback: string): string => {
@@ -81,13 +85,27 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 export default function BookingsPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    
+    // Pagination & Sorting State
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [sortBy, setSortBy] = useState('created_at');
+    const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+    
+    // Filter State
+    const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearch = useDebounce(searchTerm, 500);
+    const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all');
+    const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
+    
+    // Data State
     const [isLoading, setIsLoading] = useState(true);
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const [totalBookings, setTotalBookings] = useState(0);
     const [guests, setGuests] = useState<Guest[]>([]);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('all');
 
     // Dialogs
     const [showNewBookingDialog, setShowNewBookingDialog] = useState(false);
@@ -125,8 +143,14 @@ export default function BookingsPage() {
     // Edit Booking State
     const [editBooking, setEditBooking] = useState<Partial<BookingUpdate>>({});
 
+    // Fetch bookings with pagination, sorting, and filters
     useEffect(() => {
-        fetchData();
+        fetchBookings();
+    }, [page, pageSize, sortBy, order, debouncedSearch, statusFilter, paymentStatusFilter]);
+
+    // Fetch guests, rooms, and room types (only once)
+    useEffect(() => {
+        fetchStaticData();
     }, []);
 
     // Handle URL parameter for auto-opening booking modal (from notifications)
@@ -138,23 +162,41 @@ export default function BookingsPage() {
         }
     }, [searchParams, isLoading]);
 
-    const fetchData = async () => {
+    const fetchBookings = async () => {
         try {
-            const [bookingsData, guestsData, roomsData, roomTypesData] = await Promise.all([
-                bookingsApi.list(),
+            setIsLoading(true);
+            const response = await bookingsApi.list({
+                skip: (page - 1) * pageSize,
+                limit: pageSize,
+                sort_by: sortBy,
+                order: order,
+                search: debouncedSearch || undefined,
+                status: statusFilter !== 'all' ? statusFilter as any : undefined,
+                payment_status: paymentStatusFilter !== 'all' ? paymentStatusFilter as any : undefined,
+            });
+            setBookings(response.items);
+            setTotalBookings(response.total);
+        } catch (error) {
+            console.error('Failed to fetch bookings:', error);
+            toast.error(getErrorMessage(error, 'Failed to load bookings'));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const fetchStaticData = async () => {
+        try {
+            const [guestsData, roomsData, roomTypesData] = await Promise.all([
                 guestsApi.list(),
                 roomsApi.list(),
                 roomsApi.listTypes(),
             ]);
-            setBookings(bookingsData);
             setGuests(guestsData);
             setRooms(roomsData);
             setRoomTypes(roomTypesData);
         } catch (error) {
-            console.error('Failed to fetch data:', error);
-            toast.error(getErrorMessage(error, 'Failed to load bookings'));
-        } finally {
-            setIsLoading(false);
+            console.error('Failed to fetch static data:', error);
+            toast.error(getErrorMessage(error, 'Failed to load data'));
         }
     };
 
@@ -301,7 +343,7 @@ export default function BookingsPage() {
             toast.success('Booking created successfully');
             resetNewBookingForm();
             setShowNewBookingDialog(false);
-            fetchData();
+            fetchBookings();
         } catch (error) {
             console.error('Failed to create booking:', error);
             toast.error(getErrorMessage(error, 'Failed to create booking'));
@@ -372,7 +414,7 @@ export default function BookingsPage() {
             toast.success('Booking updated successfully');
             setShowEditDialog(false);
             setSelectedBooking(null);
-            fetchData();
+            fetchBookings();
         } catch (error) {
             console.error('Failed to update booking:', error);
             toast.error(getErrorMessage(error, 'Failed to update booking'));
@@ -393,6 +435,7 @@ export default function BookingsPage() {
     };
 
     const handleCheckIn = (booking: Booking) => {
+        console.log('Check In clicked for booking:', booking.id, 'Status:', booking.status);
         setSelectedBooking(booking);
         setShowCheckInDialog(true);
     };
@@ -408,15 +451,21 @@ export default function BookingsPage() {
         );
     };
 
-    const filteredBookings = bookings.filter((booking) => {
-        const guest = guests.find((g) => g.id === booking.guest_id);
-        const room = rooms.find((r) => r.id === booking.room_id);
-        const matchesSearch =
-            guest?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            room?.room_number.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
-        return matchesSearch && matchesStatus;
-    });
+    // Handle sorting
+    const handleSort = (field: string) => {
+        if (sortBy === field) {
+            setOrder(order === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(field);
+            setOrder('desc');
+        }
+        setPage(1); // Reset to first page on sort
+    };
+
+    // Calculate pagination
+    const totalPages = Math.ceil(totalBookings / pageSize);
+    const canGoPrevious = page > 1;
+    const canGoNext = page < totalPages;
 
     const getGuestName = (guestId: string) => guests.find((g) => g.id === guestId)?.full_name || 'Unknown';
     const getGuest = (guestId: string) => guests.find((g) => g.id === guestId);
@@ -426,7 +475,8 @@ export default function BookingsPage() {
     };
     const getRoom = (roomId: string) => rooms.find((r) => r.id === roomId);
 
-    // Calculate stats
+    // Calculate stats (using all bookings - we'd need a separate stats endpoint for accuracy)
+    // For now, using current page data as approximation
     const today = new Date().toISOString().split('T')[0];
     const todaysCheckins = bookings.filter((b) => b.check_in_date === today && (b.status === 'reserved' || b.status === 'confirmed')).length;
     const todaysCheckouts = bookings.filter((b) => b.check_out_date === today && b.status === 'checked_in').length;
@@ -535,7 +585,7 @@ export default function BookingsPage() {
                 <CardHeader className="flex flex-row items-center justify-between">
                     <div>
                         <CardTitle>Bookings</CardTitle>
-                        <CardDescription>{filteredBookings.length} bookings found</CardDescription>
+                        <CardDescription>{totalBookings} bookings found</CardDescription>
                     </div>
                     <Dialog open={showNewBookingDialog} onOpenChange={(open) => {
                         setShowNewBookingDialog(open);
@@ -760,32 +810,62 @@ export default function BookingsPage() {
                     </Dialog>
                 </CardHeader>
                 <CardContent>
-                    {/* Filters */}
-                    <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-center">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                placeholder="Search bookings..."
-                                value={searchTerm}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                                className="pl-10"
-                            />
+                    {/* Filters Toolbar */}
+                    <div className="mb-4 space-y-4">
+                        {/* Search and Quick Filters */}
+                        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search by guest name, email, or booking ID..."
+                                    value={searchTerm}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        setSearchTerm(e.target.value);
+                                        setPage(1); // Reset to first page on search
+                                    }}
+                                    className="pl-10"
+                                />
+                            </div>
+                            <Select 
+                                value={statusFilter} 
+                                onValueChange={(value) => {
+                                    setStatusFilter(value);
+                                    setPage(1);
+                                }}
+                            >
+                                <SelectTrigger className="w-[180px]">
+                                    <Filter className="mr-2 h-4 w-4" />
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="reserved">Reserved</SelectItem>
+                                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                                    <SelectItem value="checked_in">Checked In</SelectItem>
+                                    <SelectItem value="checked_out">Checked Out</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="expired">Expired</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select 
+                                value={paymentStatusFilter} 
+                                onValueChange={(value) => {
+                                    setPaymentStatusFilter(value);
+                                    setPage(1);
+                                }}
+                            >
+                                <SelectTrigger className="w-[180px]">
+                                    <Filter className="mr-2 h-4 w-4" />
+                                    <SelectValue placeholder="Payment" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Payment</SelectItem>
+                                    <SelectItem value="unpaid">Unpaid</SelectItem>
+                                    <SelectItem value="partial">Partial</SelectItem>
+                                    <SelectItem value="paid">Paid</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-[180px]">
-                                <Filter className="mr-2 h-4 w-4" />
-                                <SelectValue placeholder="Filter status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="reserved">Reserved</SelectItem>
-                                <SelectItem value="confirmed">Confirmed</SelectItem>
-                                <SelectItem value="checked_in">Checked In</SelectItem>
-                                <SelectItem value="checked_out">Checked Out</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                                <SelectItem value="expired">Expired</SelectItem>
-                            </SelectContent>
-                        </Select>
                     </div>
 
                     {/* Table */}
@@ -795,24 +875,53 @@ export default function BookingsPage() {
                                 <TableRow>
                                     <TableHead>Guest</TableHead>
                                     <TableHead>Room</TableHead>
-                                    <TableHead>Check-in</TableHead>
+                                    <TableHead>
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => handleSort('check_in_date')}
+                                            className="h-8 px-2 hover:bg-transparent"
+                                        >
+                                            Check-in
+                                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                                        </Button>
+                                    </TableHead>
                                     <TableHead>Check-out</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Amount</TableHead>
+                                    <TableHead>
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => handleSort('created_at')}
+                                            className="h-8 px-2 hover:bg-transparent"
+                                        >
+                                            Created At
+                                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                                        </Button>
+                                    </TableHead>
                                     <TableHead className="w-[50px]"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredBookings.length === 0 ? (
+                                {isLoading ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+                                        <TableCell colSpan={8} className="py-12 text-center">
+                                            <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                                        </TableCell>
+                                    </TableRow>
+                                ) : bookings.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                                             No bookings found
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    filteredBookings.map((booking) => (
+                                    bookings.map((booking) => {
+                                        const guest = booking.guest || guests.find((g) => g.id === booking.guest_id);
+                                        return (
                                         <TableRow key={booking.id}>
-                                            <TableCell className="font-medium">{getGuestName(booking.guest_id)}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {guest?.full_name || getGuestName(booking.guest_id)}
+                                            </TableCell>
                                             <TableCell>
                                                 {booking.room_id ? (
                                                     <>Room {getRoomNumber(booking.room_id)}</>
@@ -830,6 +939,9 @@ export default function BookingsPage() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>₦{Number(booking.total_amount).toLocaleString()}</TableCell>
+                                            <TableCell className="text-muted-foreground text-sm">
+                                                {format(new Date(booking.created_at), 'MMM d, yyyy')}
+                                            </TableCell>
                                             <TableCell>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -851,14 +963,20 @@ export default function BookingsPage() {
                                                         {(() => {
                                                             // Check-in logic: Allow RESERVED (pay at desk) and CONFIRMED (pre-paid)
                                                             // Room assignment happens in the check-in modal (soft allocation)
-                                                            // Note: room/roomId is NOT checked here
-                                                            const canCheckIn = 
+                                                            const isCheckInAvailable = 
                                                                 (booking.status === 'reserved' || booking.status === 'confirmed') &&
                                                                 booking.status !== 'checked_in' &&
                                                                 booking.status !== 'cancelled' &&
                                                                 booking.status !== 'expired';
                                                             
-                                                            return canCheckIn ? (
+                                                            // Debug logging
+                                                            console.log('Action Debug', { 
+                                                                id: booking.id, 
+                                                                status: booking.status, 
+                                                                available: isCheckInAvailable 
+                                                            });
+                                                            
+                                                            return isCheckInAvailable ? (
                                                                 <DropdownMenuItem onClick={() => handleCheckIn(booking)}>
                                                                     <LogIn className="mr-2 h-4 w-4" />
                                                                     Check In
@@ -887,11 +1005,41 @@ export default function BookingsPage() {
                                                 </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>
                     </div>
+                    
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="mt-4 flex items-center justify-between">
+                            <div className="text-sm text-muted-foreground">
+                                Page {page} of {totalPages} ({totalBookings} total bookings)
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage(page - 1)}
+                                    disabled={!canGoPrevious}
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                    Previous
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage(page + 1)}
+                                    disabled={!canGoNext}
+                                >
+                                    Next
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -979,7 +1127,7 @@ export default function BookingsPage() {
                 guest={selectedBooking ? getGuest(selectedBooking.guest_id) || null : null}
                 onSuccess={() => {
                     setSelectedBooking(null);
-                    fetchData();
+                    fetchBookings();
                 }}
             />
 
