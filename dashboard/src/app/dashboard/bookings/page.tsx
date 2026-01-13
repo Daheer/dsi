@@ -67,7 +67,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { bookingsApi, guestsApi, roomsApi } from '@/lib/api';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS } from '@/lib/constants';
-import type { Booking, Guest, Room, BookingCreate, GuestCreate, BookingUpdate } from '@/types';
+import type { Booking, Guest, Room, RoomType, BookingCreate, GuestCreate, BookingUpdate } from '@/types';
 import { CheckInModal } from '@/components/check-in-modal';
 
 // Helper to extract error message from API errors
@@ -85,6 +85,7 @@ export default function BookingsPage() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [guests, setGuests] = useState<Guest[]>([]);
     const [rooms, setRooms] = useState<Room[]>([]);
+    const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -113,7 +114,8 @@ export default function BookingsPage() {
     });
     const [newBooking, setNewBooking] = useState<Partial<BookingCreate>>({
         guest_id: '',
-        room_id: '',
+        room_type_id: '',  // Required for soft allocation
+        room_id: '',  // Optional - specific room assignment
         check_in_date: '',
         check_out_date: '',
         total_amount: 0,
@@ -138,14 +140,16 @@ export default function BookingsPage() {
 
     const fetchData = async () => {
         try {
-            const [bookingsData, guestsData, roomsData] = await Promise.all([
+            const [bookingsData, guestsData, roomsData, roomTypesData] = await Promise.all([
                 bookingsApi.list(),
                 guestsApi.list(),
                 roomsApi.list(),
+                roomsApi.listTypes(),
             ]);
             setBookings(bookingsData);
             setGuests(guestsData);
             setRooms(roomsData);
+            setRoomTypes(roomTypesData);
         } catch (error) {
             console.error('Failed to fetch data:', error);
             toast.error(getErrorMessage(error, 'Failed to load bookings'));
@@ -244,8 +248,9 @@ export default function BookingsPage() {
                 ...newBooking,
                 guest_id: undefined,
                 guest_details: newGuest as GuestCreate,
-                // Ensure required fields are set defaults if missing (though validation below catches it)
-                room_id: newBooking.room_id || '',
+                // Ensure required fields are set
+                room_type_id: newBooking.room_type_id || '',
+                room_id: newBooking.room_id || undefined,  // Optional for soft allocation
                 check_in_date: newBooking.check_in_date || '',
                 check_out_date: newBooking.check_out_date || '',
                 total_amount: newBooking.total_amount || 0,
@@ -255,15 +260,17 @@ export default function BookingsPage() {
             bookingPayload = {
                 ...newBooking,
                 guest_id: newBooking.guest_id || undefined,
-                room_id: newBooking.room_id || '',
+                room_type_id: newBooking.room_type_id || '',
+                room_id: newBooking.room_id || undefined,  // Optional for soft allocation
                 check_in_date: newBooking.check_in_date || '',
                 check_out_date: newBooking.check_out_date || '',
                 total_amount: newBooking.total_amount || 0,
             } as BookingCreate;
         }
 
-        if ((!bookingPayload.guest_id && !bookingPayload.guest_details) || !bookingPayload.room_id || !bookingPayload.check_in_date || !bookingPayload.check_out_date) {
-            toast.error('Please fill in all required fields');
+        // Validation: room_type_id is required (soft allocation)
+        if ((!bookingPayload.guest_id && !bookingPayload.guest_details) || !bookingPayload.room_type_id || !bookingPayload.check_in_date || !bookingPayload.check_out_date) {
+            toast.error('Please fill in all required fields (Guest, Room Type, and Dates)');
             return;
         }
 
@@ -281,8 +288,9 @@ export default function BookingsPage() {
             return;
         }
 
-        // Check for overlapping bookings
-        if (hasOverlappingBooking(bookingPayload.room_id, bookingPayload.check_in_date, bookingPayload.check_out_date)) {
+        // Check for overlapping bookings only if specific room is assigned
+        // For soft allocation (room_id not provided), backend handles availability check
+        if (bookingPayload.room_id && hasOverlappingBooking(bookingPayload.room_id, bookingPayload.check_in_date, bookingPayload.check_out_date)) {
             toast.error('This room is already booked for the selected dates');
             return;
         }
@@ -303,7 +311,7 @@ export default function BookingsPage() {
     };
 
     const resetNewBookingForm = () => {
-        setNewBooking({ guest_id: '', room_id: '', check_in_date: '', check_out_date: '', total_amount: 0, notes: '' });
+        setNewBooking({ guest_id: '', room_type_id: '', room_id: '', check_in_date: '', check_out_date: '', total_amount: 0, notes: '' });
         setNewGuest({ full_name: '', email: '', phone: '', id_type: '', id_number: '', address: '' });
         setSearchedGuest(null);
         setGuestSearchId('');
@@ -330,7 +338,8 @@ export default function BookingsPage() {
         setEditBooking({
             check_in_date: booking.check_in_date,
             check_out_date: booking.check_out_date,
-            room_id: booking.room_id,
+            room_type_id: booking.room_type_id,
+            room_id: booking.room_id || undefined,
             total_amount: Number(booking.total_amount),
             notes: booking.notes,
         });
@@ -348,6 +357,8 @@ export default function BookingsPage() {
             }
         }
 
+        // Check for overlapping bookings only if specific room is assigned
+        // For soft allocation (room_id not provided), backend handles availability check
         if (editBooking.room_id && editBooking.check_in_date && editBooking.check_out_date) {
             if (hasOverlappingBooking(editBooking.room_id, editBooking.check_in_date, editBooking.check_out_date, selectedBooking.id)) {
                 toast.error('This room is already booked for the selected dates');
@@ -409,7 +420,10 @@ export default function BookingsPage() {
 
     const getGuestName = (guestId: string) => guests.find((g) => g.id === guestId)?.full_name || 'Unknown';
     const getGuest = (guestId: string) => guests.find((g) => g.id === guestId);
-    const getRoomNumber = (roomId: string) => rooms.find((r) => r.id === roomId)?.room_number || 'Unknown';
+    const getRoomNumber = (roomId?: string) => {
+        if (!roomId) return 'Not Assigned';
+        return rooms.find((r) => r.id === roomId)?.room_number || 'Unknown';
+    };
     const getRoom = (roomId: string) => rooms.find((r) => r.id === roomId);
 
     // Calculate stats
@@ -662,25 +676,54 @@ export default function BookingsPage() {
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label>Room *</Label>
+                                    <Label>Room Type *</Label>
                                     <Select
-                                        value={newBooking.room_id}
-                                        onValueChange={(value: string) => setNewBooking({ ...newBooking, room_id: value })}
+                                        value={newBooking.room_type_id}
+                                        onValueChange={(value: string) => {
+                                            setNewBooking({ ...newBooking, room_type_id: value, room_id: '' }); // Clear room_id when type changes
+                                        }}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select a room" />
+                                            <SelectValue placeholder="Select a room type" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {getAvailableRooms(newBooking.check_in_date || '', newBooking.check_out_date || '').map((room) => (
-                                                <SelectItem key={room.id} value={room.id}>
-                                                    Room {room.room_number} - {room.room_type?.name || 'Standard'}
+                                            {roomTypes.map((roomType) => (
+                                                <SelectItem key={roomType.id} value={roomType.id}>
+                                                    {roomType.name} - ₦{Number(roomType.base_price).toLocaleString()}/night
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    {newBooking.check_in_date && newBooking.check_out_date && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Room will be assigned at check-in (soft allocation)
+                                    </p>
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label>Specific Room (Optional)</Label>
+                                    <Select
+                                        value={newBooking.room_id || ''}
+                                        onValueChange={(value: string) => setNewBooking({ ...newBooking, room_id: value })}
+                                        disabled={!newBooking.room_type_id}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Leave empty for soft allocation" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">None (Assign at check-in)</SelectItem>
+                                            {newBooking.room_type_id && getAvailableRooms(newBooking.check_in_date || '', newBooking.check_out_date || '')
+                                                .filter((room) => room.room_type_id === newBooking.room_type_id)
+                                                .map((room) => (
+                                                    <SelectItem key={room.id} value={room.id}>
+                                                        Room {room.room_number} - {room.room_type?.name || 'Standard'}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {newBooking.room_type_id && newBooking.check_in_date && newBooking.check_out_date && (
                                         <p className="text-xs text-muted-foreground">
-                                            Showing {getAvailableRooms(newBooking.check_in_date, newBooking.check_out_date).length} available rooms for selected dates
+                                            {getAvailableRooms(newBooking.check_in_date, newBooking.check_out_date)
+                                                .filter((room) => room.room_type_id === newBooking.room_type_id).length} available {roomTypes.find(rt => rt.id === newBooking.room_type_id)?.name || 'room'}(s) for selected dates
                                         </p>
                                     )}
                                 </div>
@@ -770,7 +813,15 @@ export default function BookingsPage() {
                                     filteredBookings.map((booking) => (
                                         <TableRow key={booking.id}>
                                             <TableCell className="font-medium">{getGuestName(booking.guest_id)}</TableCell>
-                                            <TableCell>Room {getRoomNumber(booking.room_id)}</TableCell>
+                                            <TableCell>
+                                                {booking.room_id ? (
+                                                    <>Room {getRoomNumber(booking.room_id)}</>
+                                                ) : (
+                                                    <span className="text-muted-foreground italic">
+                                                        {roomTypes.find(rt => rt.id === booking.room_type_id)?.name || 'Room Type'} (Not Assigned)
+                                                    </span>
+                                                )}
+                                            </TableCell>
                                             <TableCell>{format(new Date(booking.check_in_date), 'MMM d, yyyy')}</TableCell>
                                             <TableCell>{format(new Date(booking.check_out_date), 'MMM d, yyyy')}</TableCell>
                                             <TableCell>
@@ -883,7 +934,15 @@ export default function BookingsPage() {
                                 <h4 className="font-medium">Booking Information</h4>
                                 <div className="grid grid-cols-2 gap-2 text-sm">
                                     <span className="text-muted-foreground">Room</span>
-                                    <span>Room {getRoomNumber(selectedBooking.room_id)} ({getRoom(selectedBooking.room_id)?.room_type?.name || 'Standard'})</span>
+                                    <span>
+                                        {selectedBooking.room_id ? (
+                                            <>Room {getRoomNumber(selectedBooking.room_id)} ({getRoom(selectedBooking.room_id)?.room_type?.name || 'Standard'})</>
+                                        ) : (
+                                            <span className="text-muted-foreground italic">
+                                                {roomTypes.find(rt => rt.id === selectedBooking.room_type_id)?.name || 'Room Type'} (Not Assigned - Soft Allocation)
+                                            </span>
+                                        )}
+                                    </span>
                                     <span className="text-muted-foreground">Check-in</span>
                                     <span>{format(new Date(selectedBooking.check_in_date), 'EEEE, MMMM d, yyyy')}</span>
                                     <span className="text-muted-foreground">Check-out</span>
@@ -955,20 +1014,45 @@ export default function BookingsPage() {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label>Room</Label>
+                                <Label>Room Type</Label>
                                 <Select
-                                    value={editBooking.room_id || ''}
-                                    onValueChange={(value: string) => setEditBooking({ ...editBooking, room_id: value })}
+                                    value={editBooking.room_type_id || selectedBooking.room_type_id || ''}
+                                    onValueChange={(value: string) => {
+                                        setEditBooking({ ...editBooking, room_type_id: value, room_id: undefined });
+                                    }}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select a room" />
+                                        <SelectValue placeholder="Select a room type" />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        {roomTypes.map((roomType) => (
+                                            <SelectItem key={roomType.id} value={roomType.id}>
+                                                {roomType.name} - ₦{Number(roomType.base_price).toLocaleString()}/night
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label>Specific Room (Optional)</Label>
+                                <Select
+                                    value={editBooking.room_id || ''}
+                                    onValueChange={(value: string) => setEditBooking({ ...editBooking, room_id: value || undefined })}
+                                    disabled={!editBooking.room_type_id && !selectedBooking.room_type_id}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Leave empty for soft allocation" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">None (Assign at check-in)</SelectItem>
                                         {getAvailableRooms(
                                             editBooking.check_in_date || selectedBooking.check_in_date,
                                             editBooking.check_out_date || selectedBooking.check_out_date,
                                             selectedBooking.id
-                                        ).map((room) => (
+                                        )
+                                        .filter((room) => room.room_type_id === (editBooking.room_type_id || selectedBooking.room_type_id))
+                                        .map((room) => (
                                             <SelectItem key={room.id} value={room.id}>
                                                 Room {room.room_number} - {room.room_type?.name || 'Standard'}
                                             </SelectItem>
