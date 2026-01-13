@@ -24,13 +24,14 @@ export function SectionCards() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [roomsData, bookingsData, paymentsData] = await Promise.all([
+        const [roomsData, bookingsResponse, paymentsData] = await Promise.all([
           roomsApi.list(),
-          bookingsApi.list(),
+          bookingsApi.list({ limit: 1000 }), // Get a large batch for dashboard stats
           paymentsApi.list(),
         ])
         setRooms(roomsData)
-        setBookings(bookingsData)
+        // Extract items array from paginated response
+        setBookings(bookingsResponse.items || [])
         setPayments(paymentsData)
       } catch (error) {
         console.error("Failed to fetch data:", error)
