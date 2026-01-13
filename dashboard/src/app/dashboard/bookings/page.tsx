@@ -752,15 +752,15 @@ export default function BookingsPage() {
                                 <div className="grid gap-2">
                                     <Label>Specific Room (Optional)</Label>
                                     <Select
-                                        value={newBooking.room_id || ''}
-                                        onValueChange={(value: string) => setNewBooking({ ...newBooking, room_id: value })}
+                                        value={newBooking.room_id || 'none'}
+                                        onValueChange={(value: string) => setNewBooking({ ...newBooking, room_id: value === 'none' ? '' : value })}
                                         disabled={!newBooking.room_type_id}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Leave empty for soft allocation" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">None (Assign at check-in)</SelectItem>
+                                            <SelectItem value="none">None (Assign at check-in)</SelectItem>
                                             {newBooking.room_type_id && getAvailableRooms(newBooking.check_in_date || '', newBooking.check_out_date || '')
                                                 .filter((room) => room.room_type_id === newBooking.room_type_id)
                                                 .map((room) => (
@@ -1185,15 +1185,15 @@ export default function BookingsPage() {
                             <div className="grid gap-2">
                                 <Label>Specific Room (Optional)</Label>
                                 <Select
-                                    value={editBooking.room_id || ''}
-                                    onValueChange={(value: string) => setEditBooking({ ...editBooking, room_id: value || undefined })}
+                                    value={editBooking.room_id || 'none'}
+                                    onValueChange={(value: string) => setEditBooking({ ...editBooking, room_id: value === 'none' ? undefined : value })}
                                     disabled={!editBooking.room_type_id && !selectedBooking.room_type_id}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Leave empty for soft allocation" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">None (Assign at check-in)</SelectItem>
+                                        <SelectItem value="none">None (Assign at check-in)</SelectItem>
                                         {getAvailableRooms(
                                             editBooking.check_in_date || selectedBooking.check_in_date,
                                             editBooking.check_out_date || selectedBooking.check_out_date,

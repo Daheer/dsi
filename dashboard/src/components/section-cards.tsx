@@ -26,7 +26,7 @@ export function SectionCards() {
       try {
         const [roomsData, bookingsResponse, paymentsData] = await Promise.all([
           roomsApi.list(),
-          bookingsApi.list({ limit: 1000 }), // Get a large batch for dashboard stats
+          bookingsApi.list({ limit: 100 }), // Get bookings for dashboard stats (max backend limit)
           paymentsApi.list(),
         ])
         setRooms(roomsData)
