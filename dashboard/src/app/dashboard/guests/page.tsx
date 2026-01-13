@@ -13,7 +13,10 @@ import {
     UserPlus,
     Mail,
     Phone,
+    History,
+    Calendar,
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -46,6 +49,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { guestsApi, bookingsApi } from '@/lib/api';
 import type { Guest, GuestCreate, Booking } from '@/types';
+import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS } from '@/lib/constants';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 
 export default function GuestsPage() {
     const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +65,8 @@ export default function GuestsPage() {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [showNewGuestDialog, setShowNewGuestDialog] = useState(false);
+    const [showBookingHistoryDialog, setShowBookingHistoryDialog] = useState(false);
+    const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newGuest, setNewGuest] = useState<Partial<GuestCreate>>({
         full_name: '',
@@ -71,10 +85,10 @@ export default function GuestsPage() {
         try {
             const [guestsData, bookingsData] = await Promise.all([
                 guestsApi.list(),
-                bookingsApi.list(),
+                bookingsApi.list({ limit: 100 }), // Get more bookings for stats
             ]);
             setGuests(guestsData);
-            setBookings(bookingsData);
+            setBookings(bookingsData.items); // Access items from paginated response
         } catch (error) {
             console.error('Failed to fetch data:', error);
             toast.error('Failed to load guests');
@@ -112,6 +126,17 @@ export default function GuestsPage() {
             console.error('Failed to delete guest:', error);
             toast.error('Failed to delete guest');
         }
+    };
+
+    const handleViewBookingHistory = (guest: Guest) => {
+        setSelectedGuest(guest);
+        setShowBookingHistoryDialog(true);
+    };
+
+    const getGuestBookings = (guestId: string) => {
+        return bookings.filter((b) => b.guest_id === guestId).sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
     };
 
     const filteredGuests = guests.filter((guest) =>
@@ -308,6 +333,10 @@ export default function GuestsPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleViewBookingHistory(guest)}>
+                                                        <History className="mr-2 h-4 w-4" />
+                                                        Booking History
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem>
                                                         <Pencil className="mr-2 h-4 w-4" />
                                                         Edit
@@ -340,6 +369,98 @@ export default function GuestsPage() {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Booking History Dialog */}
+            <Dialog open={showBookingHistoryDialog} onOpenChange={setShowBookingHistoryDialog}>
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>
+                            Booking History - {selectedGuest?.full_name}
+                        </DialogTitle>
+                        <DialogDescription>
+                            View all bookings for this guest
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    {selectedGuest && (
+                        <div className="space-y-4">
+                            {/* Guest Info Summary */}
+                            <div className="grid grid-cols-2 gap-4 rounded-lg bg-muted/50 p-4">
+                                <div className="space-y-1">
+                                    <p className="text-sm text-muted-foreground">Email</p>
+                                    <p className="font-medium">{selectedGuest.email || 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm text-muted-foreground">Phone</p>
+                                    <p className="font-medium">{selectedGuest.phone || 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm text-muted-foreground">Total Bookings</p>
+                                    <p className="font-medium">{getGuestBookings(selectedGuest.id).length}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm text-muted-foreground">Active Bookings</p>
+                                    <p className="font-medium">
+                                        {getGuestBookings(selectedGuest.id).filter(b => b.status === 'checked_in').length}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Bookings Table */}
+                            <div className="rounded-md border">
+                                {getGuestBookings(selectedGuest.id).length === 0 ? (
+                                    <div className="py-12 text-center text-muted-foreground">
+                                        No booking history found
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Check-in</TableHead>
+                                                <TableHead>Check-out</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead>Payment</TableHead>
+                                                <TableHead className="text-right">Amount</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {getGuestBookings(selectedGuest.id).map((booking) => (
+                                                <TableRow key={booking.id}>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                                                            {format(new Date(booking.check_in_date), 'MMM dd, yyyy')}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                                                            {format(new Date(booking.check_out_date), 'MMM dd, yyyy')}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline" className={BOOKING_STATUS_COLORS[booking.status] || ''}>
+                                                            {BOOKING_STATUS_LABELS[booking.status] || booking.status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline">
+                                                            {booking.payment_status || 'N/A'}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium">
+                                                        ₦{Number(booking.total_amount).toLocaleString()}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

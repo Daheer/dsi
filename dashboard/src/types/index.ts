@@ -3,6 +3,7 @@
 // Enums
 export type UserRole = 'admin' | 'manager' | 'receptionist' | 'housekeeping' | 'kitchen' | 'auditor';
 export type RoomStatus = 'available' | 'occupied' | 'cleaning' | 'maintenance';
+// Backend serializes to lowercase
 export type BookingStatus = 'reserved' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'expired';
 export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'mobile';
 export type PaymentStatus = 'pending' | 'completed' | 'refunded' | 'failed';

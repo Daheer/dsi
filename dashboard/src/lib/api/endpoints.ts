@@ -148,8 +148,9 @@ export interface BookingsListParams {
   sort_by?: string;
   order?: 'asc' | 'desc';
   search?: string;
-  status?: BookingStatus;
-  payment_status?: BookingPaymentStatus;
+  status?: string;
+  payment_status?: string;
+  [key: string]: string | number | boolean | undefined;
 }
 
 export const bookingsApi = {

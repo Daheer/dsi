@@ -85,20 +85,20 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 export default function BookingsPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    
+
     // Pagination & Sorting State
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [sortBy, setSortBy] = useState('created_at');
     const [order, setOrder] = useState<'asc' | 'desc'>('desc');
-    
+
     // Filter State
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all');
     const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
-    
+
     // Data State
     const [isLoading, setIsLoading] = useState(true);
     const [bookings, setBookings] = useState<Booking[]>([]);
@@ -165,15 +165,28 @@ export default function BookingsPage() {
     const fetchBookings = async () => {
         try {
             setIsLoading(true);
-            const response = await bookingsApi.list({
+            const params: any = {
                 skip: (page - 1) * pageSize,
                 limit: pageSize,
                 sort_by: sortBy,
                 order: order,
-                search: debouncedSearch || undefined,
-                status: statusFilter !== 'all' ? statusFilter as any : undefined,
-                payment_status: paymentStatusFilter !== 'all' ? paymentStatusFilter as any : undefined,
-            });
+            };
+
+            if (debouncedSearch) {
+                params.search = debouncedSearch;
+            }
+
+            // Convert lowercase status to uppercase for backend enum
+            if (statusFilter && statusFilter !== 'all') {
+                params.status = statusFilter.toUpperCase();
+            }
+
+            // Convert lowercase payment status to uppercase for backend enum
+            if (paymentStatusFilter && paymentStatusFilter !== 'all') {
+                params.payment_status = paymentStatusFilter.toUpperCase();
+            }
+
+            const response = await bookingsApi.list(params);
             setBookings(response.items);
             setTotalBookings(response.total);
         } catch (error) {
@@ -292,7 +305,7 @@ export default function BookingsPage() {
                 guest_details: newGuest as GuestCreate,
                 // Ensure required fields are set
                 room_type_id: newBooking.room_type_id || '',
-                room_id: newBooking.room_id || undefined,  // Optional for soft allocation
+                room_id: (newBooking.room_id && newBooking.room_id !== 'none') ? newBooking.room_id : undefined,  // Optional for soft allocation
                 check_in_date: newBooking.check_in_date || '',
                 check_out_date: newBooking.check_out_date || '',
                 total_amount: newBooking.total_amount || 0,
@@ -303,7 +316,7 @@ export default function BookingsPage() {
                 ...newBooking,
                 guest_id: newBooking.guest_id || undefined,
                 room_type_id: newBooking.room_type_id || '',
-                room_id: newBooking.room_id || undefined,  // Optional for soft allocation
+                room_id: (newBooking.room_id && newBooking.room_id !== 'none') ? newBooking.room_id : undefined,  // Optional for soft allocation
                 check_in_date: newBooking.check_in_date || '',
                 check_out_date: newBooking.check_out_date || '',
                 total_amount: newBooking.total_amount || 0,
@@ -332,7 +345,7 @@ export default function BookingsPage() {
 
         // Check for overlapping bookings only if specific room is assigned
         // For soft allocation (room_id not provided), backend handles availability check
-        if (bookingPayload.room_id && hasOverlappingBooking(bookingPayload.room_id, bookingPayload.check_in_date, bookingPayload.check_out_date)) {
+        if (bookingPayload.room_id && bookingPayload.room_id !== 'none' && hasOverlappingBooking(bookingPayload.room_id, bookingPayload.check_in_date, bookingPayload.check_out_date)) {
             toast.error('This room is already booked for the selected dates');
             return;
         }
@@ -353,7 +366,7 @@ export default function BookingsPage() {
     };
 
     const resetNewBookingForm = () => {
-        setNewBooking({ guest_id: '', room_type_id: '', room_id: '', check_in_date: '', check_out_date: '', total_amount: 0, notes: '' });
+        setNewBooking({ guest_id: '', room_type_id: '', room_id: 'none', check_in_date: '', check_out_date: '', total_amount: 0, notes: '' });
         setNewGuest({ full_name: '', email: '', phone: '', id_type: '', id_number: '', address: '' });
         setSearchedGuest(null);
         setGuestSearchId('');
@@ -381,7 +394,7 @@ export default function BookingsPage() {
             check_in_date: booking.check_in_date,
             check_out_date: booking.check_out_date,
             room_type_id: booking.room_type_id,
-            room_id: booking.room_id || undefined,
+            room_id: booking.room_id || 'none',  // Use 'none' if no room assigned
             total_amount: Number(booking.total_amount),
             notes: booking.notes,
         });
@@ -401,7 +414,7 @@ export default function BookingsPage() {
 
         // Check for overlapping bookings only if specific room is assigned
         // For soft allocation (room_id not provided), backend handles availability check
-        if (editBooking.room_id && editBooking.check_in_date && editBooking.check_out_date) {
+        if (editBooking.room_id && editBooking.room_id !== 'none' && editBooking.check_in_date && editBooking.check_out_date) {
             if (hasOverlappingBooking(editBooking.room_id, editBooking.check_in_date, editBooking.check_out_date, selectedBooking.id)) {
                 toast.error('This room is already booked for the selected dates');
                 return;
@@ -410,7 +423,13 @@ export default function BookingsPage() {
 
         setIsSubmitting(true);
         try {
-            await bookingsApi.update(selectedBooking.id, editBooking);
+            // Prepare update payload, handling "none" for room_id
+            const updatePayload = {
+                ...editBooking,
+                room_id: (editBooking.room_id && editBooking.room_id !== 'none') ? editBooking.room_id : undefined,
+            };
+
+            await bookingsApi.update(selectedBooking.id, updatePayload);
             toast.success('Booking updated successfully');
             setShowEditDialog(false);
             setSelectedBooking(null);
@@ -425,7 +444,7 @@ export default function BookingsPage() {
 
     const handleCancelBooking = async (bookingId: string) => {
         await toast.promise(
-            bookingsApi.update(bookingId, { status: 'cancelled' }).then(() => fetchData()),
+            bookingsApi.update(bookingId, { status: 'cancelled' }).then(() => fetchBookings()),
             {
                 loading: 'Cancelling booking...',
                 success: 'Booking cancelled successfully',
@@ -435,14 +454,13 @@ export default function BookingsPage() {
     };
 
     const handleCheckIn = (booking: Booking) => {
-        console.log('Check In clicked for booking:', booking.id, 'Status:', booking.status);
         setSelectedBooking(booking);
         setShowCheckInDialog(true);
     };
 
     const handleCheckOut = async (bookingId: string) => {
         await toast.promise(
-            bookingsApi.checkOut(bookingId).then(() => fetchData()),
+            bookingsApi.checkOut(bookingId).then(() => fetchBookings()),
             {
                 loading: 'Checking out guest...',
                 success: 'Guest checked out successfully!',
@@ -752,8 +770,8 @@ export default function BookingsPage() {
                                 <div className="grid gap-2">
                                     <Label>Specific Room (Optional)</Label>
                                     <Select
-                                        value={newBooking.room_id || 'none'}
-                                        onValueChange={(value: string) => setNewBooking({ ...newBooking, room_id: value === 'none' ? '' : value })}
+                                        value={newBooking.room_id || ''}
+                                        onValueChange={(value: string) => setNewBooking({ ...newBooking, room_id: value })}
                                         disabled={!newBooking.room_type_id}
                                     >
                                         <SelectTrigger>
@@ -826,9 +844,9 @@ export default function BookingsPage() {
                                     className="pl-10"
                                 />
                             </div>
-                            <Select 
-                                value={statusFilter} 
-                                onValueChange={(value) => {
+                            <Select
+                                value={statusFilter}
+                                onValueChange={(value: string) => {
                                     setStatusFilter(value);
                                     setPage(1);
                                 }}
@@ -847,9 +865,9 @@ export default function BookingsPage() {
                                     <SelectItem value="expired">Expired</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <Select 
-                                value={paymentStatusFilter} 
-                                onValueChange={(value) => {
+                            <Select
+                                value={paymentStatusFilter}
+                                onValueChange={(value: string) => {
                                     setPaymentStatusFilter(value);
                                     setPage(1);
                                 }}
@@ -918,100 +936,84 @@ export default function BookingsPage() {
                                     bookings.map((booking) => {
                                         const guest = booking.guest || guests.find((g) => g.id === booking.guest_id);
                                         return (
-                                        <TableRow key={booking.id}>
-                                            <TableCell className="font-medium">
-                                                {guest?.full_name || getGuestName(booking.guest_id)}
-                                            </TableCell>
-                                            <TableCell>
-                                                {booking.room_id ? (
-                                                    <>Room {getRoomNumber(booking.room_id)}</>
-                                                ) : (
-                                                    <span className="text-muted-foreground italic">
-                                                        {roomTypes.find(rt => rt.id === booking.room_type_id)?.name || 'Room Type'} (Not Assigned)
-                                                    </span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>{format(new Date(booking.check_in_date), 'MMM d, yyyy')}</TableCell>
-                                            <TableCell>{format(new Date(booking.check_out_date), 'MMM d, yyyy')}</TableCell>
-                                            <TableCell>
-                                                <Badge className={BOOKING_STATUS_COLORS[booking.status] || ''}>
-                                                    {BOOKING_STATUS_LABELS[booking.status] || booking.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>₦{Number(booking.total_amount).toLocaleString()}</TableCell>
-                                            <TableCell className="text-muted-foreground text-sm">
-                                                {format(new Date(booking.created_at), 'MMM d, yyyy')}
-                                            </TableCell>
-                                            <TableCell>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleViewBooking(booking)}>
-                                                            <Eye className="mr-2 h-4 w-4" />
-                                                            View Details
-                                                        </DropdownMenuItem>
-                                                        {(booking.status === 'reserved' || booking.status === 'confirmed') && (
-                                                            <DropdownMenuItem onClick={() => handleEditBooking(booking)}>
-                                                                <Pencil className="mr-2 h-4 w-4" />
-                                                                Edit
+                                            <TableRow key={booking.id}>
+                                                <TableCell className="font-medium">
+                                                    {guest?.full_name || getGuestName(booking.guest_id)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {booking.room_id ? (
+                                                        <>Room {getRoomNumber(booking.room_id)}</>
+                                                    ) : (
+                                                        <span className="text-muted-foreground italic">
+                                                            {roomTypes.find(rt => rt.id === booking.room_type_id)?.name || 'Room Type'} (Not Assigned)
+                                                        </span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>{format(new Date(booking.check_in_date), 'MMM d, yyyy')}</TableCell>
+                                                <TableCell>{format(new Date(booking.check_out_date), 'MMM d, yyyy')}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline" className={BOOKING_STATUS_COLORS[booking.status] || ''}>
+                                                        {BOOKING_STATUS_LABELS[booking.status] || booking.status}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>₦{Number(booking.total_amount).toLocaleString()}</TableCell>
+                                                <TableCell className="text-muted-foreground text-sm">
+                                                    {format(new Date(booking.created_at), 'MMM d, yyyy')}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuItem onClick={() => handleViewBooking(booking)}>
+                                                                <Eye className="mr-2 h-4 w-4" />
+                                                                View Details
                                                             </DropdownMenuItem>
-                                                        )}
-                                                        {(() => {
-                                                            // Check-in logic: Allow RESERVED (pay at desk) and CONFIRMED (pre-paid)
-                                                            // Room assignment happens in the check-in modal (soft allocation)
-                                                            const isCheckInAvailable = 
-                                                                (booking.status === 'reserved' || booking.status === 'confirmed') &&
-                                                                booking.status !== 'checked_in' &&
-                                                                booking.status !== 'cancelled' &&
-                                                                booking.status !== 'expired';
-                                                            
-                                                            // Debug logging
-                                                            console.log('Action Debug', { 
-                                                                id: booking.id, 
-                                                                status: booking.status, 
-                                                                available: isCheckInAvailable 
-                                                            });
-                                                            
-                                                            return isCheckInAvailable ? (
+                                                            {(booking.status === 'reserved' || booking.status === 'confirmed') && (
+                                                                <DropdownMenuItem onClick={() => handleEditBooking(booking)}>
+                                                                    <Pencil className="mr-2 h-4 w-4" />
+                                                                    Edit
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {/* Check In - only show for reserved or confirmed */}
+                                                            {(booking.status === 'reserved' || booking.status === 'confirmed') && (
                                                                 <DropdownMenuItem onClick={() => handleCheckIn(booking)}>
                                                                     <LogIn className="mr-2 h-4 w-4" />
                                                                     Check In
                                                                 </DropdownMenuItem>
-                                                            ) : null;
-                                                        })()}
-                                                        {booking.status === 'checked_in' && (
-                                                            <DropdownMenuItem onClick={() => handleCheckOut(booking.id)}>
-                                                                <LogOutIcon className="mr-2 h-4 w-4" />
-                                                                Check Out
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                        {(booking.status === 'reserved' || booking.status === 'confirmed') && (
-                                                            <>
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuItem
-                                                                    className="text-destructive"
-                                                                    onClick={() => handleCancelBooking(booking.id)}
-                                                                >
-                                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                                    Cancel Booking
+                                                            )}
+                                                            {booking.status === 'checked_in' && (
+                                                                <DropdownMenuItem onClick={() => handleCheckOut(booking.id)}>
+                                                                    <LogOutIcon className="mr-2 h-4 w-4" />
+                                                                    Check Out
                                                                 </DropdownMenuItem>
-                                                            </>
-                                                        )}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
-                                        </TableRow>
+                                                            )}
+                                                            {(booking.status === 'reserved' || booking.status === 'confirmed') && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        className="text-destructive"
+                                                                        onClick={() => handleCancelBooking(booking.id)}
+                                                                    >
+                                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                                        Cancel Booking
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                            </TableRow>
                                         );
                                     })
                                 )}
                             </TableBody>
                         </Table>
                     </div>
-                    
+
                     {/* Pagination */}
                     {totalPages > 1 && (
                         <div className="mt-4 flex items-center justify-between">
@@ -1055,7 +1057,7 @@ export default function BookingsPage() {
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-muted-foreground">Status</span>
-                                <Badge className={BOOKING_STATUS_COLORS[selectedBooking.status] || ''}>
+                                <Badge variant="outline" className={BOOKING_STATUS_COLORS[selectedBooking.status] || ''}>
                                     {BOOKING_STATUS_LABELS[selectedBooking.status] || selectedBooking.status}
                                 </Badge>
                             </div>
@@ -1185,8 +1187,8 @@ export default function BookingsPage() {
                             <div className="grid gap-2">
                                 <Label>Specific Room (Optional)</Label>
                                 <Select
-                                    value={editBooking.room_id || 'none'}
-                                    onValueChange={(value: string) => setEditBooking({ ...editBooking, room_id: value === 'none' ? undefined : value })}
+                                    value={editBooking.room_id || ''}
+                                    onValueChange={(value: string) => setEditBooking({ ...editBooking, room_id: value || undefined })}
                                     disabled={!editBooking.room_type_id && !selectedBooking.room_type_id}
                                 >
                                     <SelectTrigger>
@@ -1199,12 +1201,12 @@ export default function BookingsPage() {
                                             editBooking.check_out_date || selectedBooking.check_out_date,
                                             selectedBooking.id
                                         )
-                                        .filter((room) => room.room_type_id === (editBooking.room_type_id || selectedBooking.room_type_id))
-                                        .map((room) => (
-                                            <SelectItem key={room.id} value={room.id}>
-                                                Room {room.room_number} - {room.room_type?.name || 'Standard'}
-                                            </SelectItem>
-                                        ))}
+                                            .filter((room) => room.room_type_id === (editBooking.room_type_id || selectedBooking.room_type_id))
+                                            .map((room) => (
+                                                <SelectItem key={room.id} value={room.id}>
+                                                    Room {room.room_number} - {room.room_type?.name || 'Standard'}
+                                                </SelectItem>
+                                            ))}
                                     </SelectContent>
                                 </Select>
                             </div>

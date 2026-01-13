@@ -50,7 +50,7 @@ export default function KitchenPage() {
                 bookingsApi.list(),
             ]);
             setOrders(ordersData);
-            setBookings(bookingsData);
+            setBookings(bookingsData.items);
         } catch (error) {
             console.error('Failed to fetch data:', error);
             toast.error('Failed to load orders');

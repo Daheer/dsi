@@ -74,7 +74,7 @@ export default function PaymentsPage() {
                 bookingsApi.list(),
             ]);
             setPayments(paymentsData);
-            setBookings(bookingsData);
+            setBookings(bookingsData.items);
         } catch (error) {
             console.error('Failed to fetch data:', error);
             toast.error('Failed to load payments');
@@ -133,7 +133,6 @@ export default function PaymentsPage() {
                     </CardHeader>
                     <CardFooter className="flex-col items-start gap-1.5 text-sm">
                         <div className="line-clamp-1 flex gap-2 font-medium">
-                            <DollarSign className="h-4 w-4" />
                             Collected today
                         </div>
                         <div className="text-muted-foreground">

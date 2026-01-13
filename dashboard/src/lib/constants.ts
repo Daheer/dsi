@@ -28,14 +28,14 @@ export const ROOM_STATUS_LABELS = {
   maintenance: 'Maintenance',
 } as const;
 
-// Booking status colors
+// Booking status colors (outline style like rooms page)
 export const BOOKING_STATUS_COLORS = {
-  reserved: 'bg-blue-500',
-  confirmed: 'bg-green-500',
-  checked_in: 'bg-emerald-500',
-  checked_out: 'bg-slate-500',
-  cancelled: 'bg-rose-500',
-  expired: 'bg-orange-500',
+  reserved: 'text-blue-400',
+  confirmed: 'text-green-400',
+  checked_in: 'text-emerald-400',
+  checked_out: 'text-slate-400',
+  cancelled: 'text-rose-400',
+  expired: 'text-orange-400',
 } as const;
 
 export const BOOKING_STATUS_LABELS = {
