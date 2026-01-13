@@ -251,13 +251,13 @@ export const housekeepingApi = {
 
 // Kitchen/Meals API
 export const kitchenApi = {
-  listOrders: () => api.get<MealOrder[]>('/meals/orders'),
+  listOrders: () => api.get<MealOrder[]>('/kitchen/orders'),
 
   createOrder: (order: MealOrderCreate) =>
-    api.post<MealOrder>('/meals/orders', order),
+    api.post<MealOrder>('/kitchen/orders', order),
 
   updateOrder: (id: string, order: MealOrderUpdate) =>
-    api.put<MealOrder>('/meals/orders/${id}', order),
+    api.put<MealOrder>('/kitchen/orders/${id}', order),
 };
 
 // Reports API
@@ -299,9 +299,19 @@ export interface GuestsPerDayItem {
   guests: number;
 }
 
+export interface DashboardStats {
+  total_revenue: number;
+  revenue_today: number;
+  active_bookings: number;
+  pending_bookings: number;
+}
+
 export const statsApi = {
   getGuestsPerDay: (days: number = 30) =>
     api.get<GuestsPerDayItem[]>('/stats/guests-per-day', { params: { days } }),
+  
+  getDashboard: () =>
+    api.get<DashboardStats>('/stats/dashboard'),
 };
 
 // Notifications API

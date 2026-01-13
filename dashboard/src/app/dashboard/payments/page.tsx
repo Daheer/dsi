@@ -39,8 +39,9 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { paymentsApi, bookingsApi } from '@/lib/api';
+import { paymentsApi, bookingsApi, statsApi } from '@/lib/api';
 import type { Payment, Booking } from '@/types';
+import type { DashboardStats } from '@/lib/api/endpoints';
 
 const PAYMENT_STATUS_COLORS: Record<string, string> = {
     completed: 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30',
@@ -60,6 +61,7 @@ export default function PaymentsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [payments, setPayments] = useState<Payment[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -69,12 +71,14 @@ export default function PaymentsPage() {
 
     const fetchData = async () => {
         try {
-            const [paymentsData, bookingsData] = await Promise.all([
+            const [paymentsData, bookingsData, statsData] = await Promise.all([
                 paymentsApi.list(),
                 bookingsApi.list(),
+                statsApi.getDashboard(),
             ]);
             setPayments(paymentsData);
             setBookings(bookingsData.items);
+            setDashboardStats(statsData);
         } catch (error) {
             console.error('Failed to fetch data:', error);
             toast.error('Failed to load payments');
@@ -91,14 +95,9 @@ export default function PaymentsPage() {
         return matchesSearch && matchesStatus;
     });
 
-    // Calculate stats
-    const today = new Date().toISOString().split('T')[0];
-    const todaysRevenue = payments
-        .filter((p) => p.status === 'completed' && p.processed_at?.startsWith(today))
-        .reduce((sum, p) => sum + Number(p.amount), 0);
-    const totalRevenue = payments
-        .filter((p) => p.status === 'completed')
-        .reduce((sum, p) => sum + Number(p.amount), 0);
+    // Use backend-calculated stats for revenue
+    const todaysRevenue = dashboardStats?.revenue_today ?? 0;
+    const totalRevenue = dashboardStats?.total_revenue ?? 0;
     const totalTransactions = payments.length;
     const pendingPayments = payments.filter((p) => p.status === 'pending').length;
 

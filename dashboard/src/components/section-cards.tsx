@@ -12,27 +12,27 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { roomsApi, bookingsApi, paymentsApi } from "@/lib/api"
-import type { Room, Booking, Payment } from "@/types"
+import { roomsApi, bookingsApi, statsApi } from "@/lib/api"
+import type { Room, Booking } from "@/types"
+import type { DashboardStats } from "@/lib/api/endpoints"
 
 export function SectionCards() {
   const [isLoading, setIsLoading] = useState(true)
   const [rooms, setRooms] = useState<Room[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
-  const [payments, setPayments] = useState<Payment[]>([])
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [roomsData, bookingsData, paymentsData] = await Promise.all([
+        const [roomsData, bookingsData, statsData] = await Promise.all([
           roomsApi.list(),
-          bookingsApi.list({ limit: 100 }), // Get more bookings for stats
-          paymentsApi.list(),
+          bookingsApi.list({ limit: 100 }),
+          statsApi.getDashboard(),
         ])
         setRooms(roomsData)
-        // bookingsApi.list() now returns paginated response
         setBookings(bookingsData.items)
-        setPayments(paymentsData)
+        setDashboardStats(statsData)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -42,23 +42,24 @@ export function SectionCards() {
     fetchData()
   }, [])
 
-  // Calculate metrics
+  // Calculate room metrics (still client-side as they depend on room status)
   const totalRooms = rooms.length
-  const checkedInBookings = bookings.filter((b) => b.status === "checked_in").length
   const availableRooms = rooms.filter((r) => r.status === "available").length
-  const occupancyRate = totalRooms > 0 ? Math.round((checkedInBookings / totalRooms) * 100) : 0
 
+  // Use backend-calculated stats for bookings and revenue
+  const activeBookings = dashboardStats?.active_bookings ?? 0
+  const pendingBookings = dashboardStats?.pending_bookings ?? 0
+  const revenueToday = dashboardStats?.revenue_today ?? 0
+  const occupancyRate = totalRooms > 0 ? Math.round((activeBookings / totalRooms) * 100) : 0
+
+  // Calculate today's check-ins/check-outs from bookings (for informational display)
   const today = new Date().toISOString().split("T")[0]
   const todaysCheckins = bookings.filter(
-    (b) => b.check_in_date === today && b.status === "reserved"
+    (b) => b.check_in_date === today && (b.status === "reserved" || b.status === "confirmed")
   ).length
   const todaysCheckouts = bookings.filter(
     (b) => b.check_out_date === today && b.status === "checked_in"
   ).length
-
-  const todaysRevenue = payments
-    .filter((p) => p.status === "completed" && p.processed_at.startsWith(today))
-    .reduce((sum, p) => sum + Number(p.amount), 0)
 
   if (isLoading) {
     return (
@@ -80,7 +81,7 @@ export function SectionCards() {
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              {checkedInBookings}/{totalRooms} Rooms
+              {activeBookings}/{totalRooms} Rooms
             </Badge>
           </CardAction>
         </CardHeader>
@@ -89,7 +90,7 @@ export function SectionCards() {
             {availableRooms} rooms available
           </div>
           <div className="text-muted-foreground">
-            {checkedInBookings} guests checked in
+            {activeBookings} guests checked in
           </div>
         </CardFooter>
       </Card>
@@ -142,20 +143,20 @@ export function SectionCards() {
         <CardHeader>
           <CardDescription>Today&apos;s Revenue</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            ₦{todaysRevenue.toLocaleString()}
+            ₦{revenueToday.toLocaleString()}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              +{payments.filter((p) => p.processed_at.startsWith(today)).length} txns
+              +{pendingBookings} pending
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Payments received today
+            Paid bookings today
           </div>
           <div className="text-muted-foreground">
-            All payment methods
+            From confirmed payments
           </div>
         </CardFooter>
       </Card>
