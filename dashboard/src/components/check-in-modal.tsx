@@ -52,6 +52,8 @@ export function CheckInModal({
     const [guestIdType, setGuestIdType] = useState<string>('');
     const [guestIdNumber, setGuestIdNumber] = useState<string>('');
     const [keyCardId, setKeyCardId] = useState<string>('');
+    const [wifiResidential, setWifiResidential] = useState<string>('');
+    const [wifiBusiness, setWifiBusiness] = useState<string>('');
 
     // Check if guest ID is missing
     const isMissingGuestId = !guest?.id_number || !guest?.id_type;
@@ -64,6 +66,8 @@ export function CheckInModal({
             setGuestIdType(guest?.id_type || '');
             setGuestIdNumber(guest?.id_number || '');
             setKeyCardId('');
+            setWifiResidential('');
+            setWifiBusiness('');
 
             // Fetch available rooms for this booking's room type
             fetchAvailableRooms();
@@ -181,10 +185,12 @@ export function CheckInModal({
                 guest_id_type: guestIdType || undefined,
                 guest_id_number: guestIdNumber || undefined,
                 key_card_id: keyCardId || undefined,
+                wifi_code_residential: wifiResidential || undefined,
+                wifi_code_business: wifiBusiness || undefined,
             };
 
             await bookingsApi.checkIn(checkInData);
-            toast.success('Guest checked in successfully!');
+            toast.success('Guest checked in successfully! Welcome email sent.');
             onOpenChange(false);
             onSuccess();
         } catch (error) {
@@ -340,27 +346,50 @@ export function CheckInModal({
                         </div>
                     )}
 
-                    {/* Step 3: Key Card */}
+                    {/* Step 3: Handover (Key Card & Wi-Fi) */}
                     {step === 'key' && (
                         <div className="space-y-4">
                             <div>
-                                <h3 className="text-lg font-semibold">Key Card Handover</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    Issue a key card to the guest
-                                </p>
+                                <h3 className="text-lg font-semibold">Guest Package</h3>
+
                             </div>
 
+                            {/* Key Card */}
                             <div className="space-y-3">
-                                <Label htmlFor="key-card-id">Key/Card ID (Optional)</Label>
+                                <Label htmlFor="key-card-id">Key/Card ID</Label>
                                 <Input
                                     id="key-card-id"
                                     value={keyCardId}
                                     onChange={(e) => setKeyCardId(e.target.value)}
-                                    placeholder="e.g., KC-201, Card-102"
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Record the physical key or card number issued to the guest
-                                </p>
+                            </div>
+
+                            {/* Wi-Fi Vouchers */}
+                            <Separator className="my-4" />
+                            <div className="space-y-4">
+                                <h4 className="font-medium text-sm flex items-center gap-2">
+                                    Wi-Fi Vouchers
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="wifi-residential">Residential </Label>
+                                        <Input
+                                            id="wifi-residential"
+                                            value={wifiResidential}
+                                            onChange={(e) => setWifiResidential(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="wifi-business">Business </Label>
+                                        <Input
+                                            id="wifi-business"
+                                            value={wifiBusiness}
+                                            onChange={(e) => setWifiBusiness(e.target.value)}
+
+                                        />
+                                    </div>
+                                </div>
+
                             </div>
 
                             {/* Summary */}
@@ -385,6 +414,18 @@ export function CheckInModal({
                                         <div className="flex justify-between">
                                             <span className="text-muted-foreground">Key Card:</span>
                                             <span>{keyCardId}</span>
+                                        </div>
+                                    )}
+                                    {wifiResidential && (
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Wi-Fi (Residential):</span>
+                                            <span className="font-mono">{wifiResidential}</span>
+                                        </div>
+                                    )}
+                                    {wifiBusiness && (
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Wi-Fi (Business):</span>
+                                            <span className="font-mono">{wifiBusiness}</span>
                                         </div>
                                     )}
                                 </div>

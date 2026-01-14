@@ -118,6 +118,9 @@ export interface Booking {
   created_by: string;
   created_at: string;
   notes?: string;
+  key_card_id?: string;
+  wifi_code_residential?: string;
+  wifi_code_business?: string;
   guest?: Guest;
   room_type?: RoomType;
   room?: Room;
@@ -151,6 +154,8 @@ export interface BookingCheckIn {
   guest_id_type?: string;  // To fill gaps in guest profile
   guest_id_number?: string;  // To fill gaps in guest profile
   key_card_id?: string;  // The ID of the key/card given
+  wifi_code_residential?: string;  // Residential Wi-Fi voucher code
+  wifi_code_business?: string;  // Business Wi-Fi voucher code
 }
 
 // Payment
