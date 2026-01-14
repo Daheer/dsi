@@ -190,6 +190,25 @@ export const bookingsApi = {
       check_in: checkIn,
       check_out: checkOut,
     }),
+
+  getReceipt: async (bookingId: string): Promise<void> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    
+    const response = await fetch(`${apiUrl}/bookings/${bookingId}/receipt`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to generate receipt');
+    }
+    
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  },
 };
 
 // Payments API

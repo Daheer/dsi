@@ -19,6 +19,7 @@ import {
     ArrowUpDown,
     ChevronLeft,
     ChevronRight,
+    Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -989,6 +990,19 @@ export default function BookingsPage() {
                                                                 <DropdownMenuItem onClick={() => handleCheckOut(booking.id)}>
                                                                     <LogOutIcon className="mr-2 h-4 w-4" />
                                                                     Check Out
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {/* Print Receipt - for confirmed, checked-in, or checked-out */}
+                                                            {(booking.status === 'confirmed' || booking.status === 'checked_in' || booking.status === 'checked_out') && (
+                                                                <DropdownMenuItem onClick={async () => {
+                                                                    try {
+                                                                        await bookingsApi.getReceipt(booking.id);
+                                                                    } catch (error) {
+                                                                        toast.error('Failed to generate receipt');
+                                                                    }
+                                                                }}>
+                                                                    <Printer className="mr-2 h-4 w-4" />
+                                                                    Print Receipt
                                                                 </DropdownMenuItem>
                                                             )}
                                                             {(booking.status === 'reserved' || booking.status === 'confirmed') && (
